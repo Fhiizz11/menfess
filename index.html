@@ -318,11 +318,19 @@
             font-size: 1.3rem;
         }
         .tab-buttons {
-            flex-direction: column;
+            flex-direction: row; /* Tetap satu baris */
+            flex-wrap: wrap; /* Izinkan wrap jika terlalu kecil */
             gap: 0.5rem;
+            /* Tambahkan padding horizontal agar tidak terlalu mepet ke pinggir */
+            padding: 0 0.5rem; /* Sesuaikan sesuai kebutuhan */
         }
         .tab-button {
-            width: 100%;
+            flex-grow: 1; /* Memungkinkan tombol untuk mengisi ruang */
+            min-width: 45%; /* Pastikan tidak terlalu kecil */
+            max-width: calc(50% - 0.25rem); /* Batasi agar tidak terlalu lebar, kurangi gap */
+            padding: 0.5rem 1rem; /* Sesuaikan padding */
+            font-size: 0.9rem; /* Sesuaikan ukuran font */
+            box-sizing: border-box; /* Penting agar padding tidak menambah lebar */
         }
     }
   </style>

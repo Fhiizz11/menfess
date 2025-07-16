@@ -568,8 +568,9 @@
         let menfessMessages = [];
         let songfessMessages = [];
         // Mengubah inisialisasi timestamp agar tidak memicu notifikasi pada load awal
-        let lastMenfessTimestamp = new Date();
-        let lastSongfessTimestamp = new Date();
+        // Inisialisasi dengan Date.now() untuk mendapatkan waktu saat ini
+        let lastMenfessTimestamp = new Date(Date.now());
+        let lastSongfessTimestamp = new Date(Date.now());
 
         // --- Utility Functions ---
         function showAlert(message, type) {
@@ -764,7 +765,7 @@
         function requestNotificationPermission() {
             if (!("Notification" in window)) {
                 console.warn("Browser does not support desktop notification");
-            } else if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+            } else if (Notification.permission === "default") { // Hanya minta jika statusnya 'default'
                 Notification.requestPermission().then(permission => {
                     if (permission === "granted") {
                         showAlert("Notifikasi diaktifkan!", "success");
@@ -772,6 +773,8 @@
                         showAlert("Notifikasi diblokir. Anda tidak akan menerima notifikasi pesan baru.", "error");
                     }
                 });
+            } else if (Notification.permission === "denied") {
+                showAlert("Notifikasi diblokir. Silakan ubah pengaturan browser Anda.", "error");
             }
         }
 
@@ -784,30 +787,47 @@
         // Listen for Menfess messages with notification
         const menfessQuery = query(collection(db, "menfess"));
         onSnapshot(menfessQuery, (snapshot) => {
-            // Jika ini adalah load awal, set lastMenfessTimestamp ke timestamp pesan terbaru yang ada
-            // agar tidak ada notifikasi untuk pesan lama.
-            if (lastMenfessTimestamp.getTime() === new Date().getTime() && snapshot.docs.length > 0) {
-                const latestDoc = snapshot.docs.reduce((prev, curr) => {
-                    const prevTs = prev.data().timestamp ? prev.data().timestamp.toDate() : new Date(0);
-                    const currTs = curr.data().timestamp ? curr.data().timestamp.toDate() : new Date(0);
-                    return currTs > prevTs ? curr : prev;
-                });
-                lastMenfessTimestamp = latestDoc.data().timestamp ? latestDoc.data().timestamp.toDate() : new Date(0);
-            }
-
+            // Ini akan dijalankan setiap kali ada perubahan.
+            // Kita perlu membedakan antara load awal dan update.
+            const newMessagesAdded = [];
             snapshot.docChanges().forEach(change => {
                 if (change.type === "added") {
                     const newMenfess = change.doc.data();
                     const timestamp = newMenfess.timestamp ? newMenfess.timestamp.toDate() : new Date(0);
-                    // Hanya notifikasi jika pesan lebih baru dari timestamp terakhir yang diketahui
+                    // Bandingkan dengan timestamp terakhir yang diketahui.
+                    // Jika timestamp pesan baru lebih besar dari timestamp terakhir, itu adalah pesan baru.
                     if (timestamp > lastMenfessTimestamp) {
-                        showBrowserNotification("Pesan Menfess Baru!", `Dari: ${newMenfess.from} Untuk: ${newMenfess.to}\n"${newMenfess.message.substring(0, 50)}..."`);
-                        lastMenfessTimestamp = timestamp; // Perbarui timestamp terakhir setelah notifikasi
+                        newMessagesAdded.push({ type: 'menfess', data: newMenfess, timestamp: timestamp });
                     }
                 }
             });
+
             menfessMessages = snapshot.docs.map(doc => ({ id: doc.id, type: 'menfess', ...doc.data() }));
             renderMessages();
+
+            // Setelah semua pesan diproses dan dirender, kirim notifikasi
+            // dan perbarui lastMenfessTimestamp ke timestamp pesan terbaru dari snapshot
+            if (newMessagesAdded.length > 0) {
+                newMessagesAdded.forEach(msg => {
+                    showBrowserNotification("Pesan Menfess Baru!", `Dari: ${msg.data.from} Untuk: ${msg.data.to}\n"${msg.data.message.substring(0, 50)}..."`);
+                });
+                // Perbarui lastMenfessTimestamp ke timestamp pesan terbaru di snapshot
+                lastMenfessTimestamp = menfessMessages.reduce((maxTs, msg) => {
+                    const msgTs = msg.timestamp ? msg.timestamp.toDate() : new Date(0);
+                    return msgTs > maxTs ? msgTs : maxTs;
+                }, lastMenfessTimestamp);
+            } else if (menfessMessages.length > 0) {
+                // Jika tidak ada pesan baru yang ditambahkan, tapi ada pesan di snapshot,
+                // pastikan lastMenfessTimestamp diinisialisasi dengan pesan terbaru yang ada
+                // Ini untuk kasus load awal agar tidak notifikasi pesan lama.
+                const latestTimestampInSnapshot = menfessMessages.reduce((maxTs, msg) => {
+                    const msgTs = msg.timestamp ? msg.timestamp.toDate() : new Date(0);
+                    return msgTs > maxTs ? msgTs : maxTs;
+                }, new Date(0)); // Mulai dari epoch
+                if (latestTimestampInSnapshot > lastMenfessTimestamp) {
+                    lastMenfessTimestamp = latestTimestampInSnapshot;
+                }
+            }
         }, (error) => {
             console.error("Error fetching menfess messages:", error);
             showAlert("Failed to load Menfess messages.", "error");
@@ -816,30 +836,37 @@
         // Listen for Songfess messages with notification
         const songfessQuery = query(collection(db, "songfess"));
         onSnapshot(songfessQuery, (snapshot) => {
-             // Jika ini adalah load awal, set lastSongfessTimestamp ke timestamp pesan terbaru yang ada
-            // agar tidak ada notifikasi untuk pesan lama.
-            if (lastSongfessTimestamp.getTime() === new Date().getTime() && snapshot.docs.length > 0) {
-                const latestDoc = snapshot.docs.reduce((prev, curr) => {
-                    const prevTs = prev.data().timestamp ? prev.data().timestamp.toDate() : new Date(0);
-                    const currTs = curr.data().timestamp ? curr.data().timestamp.toDate() : new Date(0);
-                    return currTs > prevTs ? curr : prev;
-                });
-                lastSongfessTimestamp = latestDoc.data().timestamp ? latestDoc.data().timestamp.toDate() : new Date(0);
-            }
-
+            const newMessagesAdded = [];
             snapshot.docChanges().forEach(change => {
                 if (change.type === "added") {
                     const newSongfess = change.doc.data();
                     const timestamp = newSongfess.timestamp ? newSongfess.timestamp.toDate() : new Date(0);
-                     // Hanya notifikasi jika pesan lebih baru dari timestamp terakhir yang diketahui
                     if (timestamp > lastSongfessTimestamp) {
-                        showBrowserNotification("Pesan Songfess Baru!", `Dari: ${newSongfess.from} Untuk: ${newSongfess.to}\nLagu: ${newSongfess.song.title} oleh ${newSongfess.song.artist}`);
-                        lastSongfessTimestamp = timestamp; // Perbarui timestamp terakhir setelah notifikasi
+                        newMessagesAdded.push({ type: 'songfess', data: newSongfess, timestamp: timestamp });
                     }
                 }
             });
+
             songfessMessages = snapshot.docs.map(doc => ({ id: doc.id, type: 'songfess', ...doc.data() }));
             renderMessages();
+
+            if (newMessagesAdded.length > 0) {
+                newMessagesAdded.forEach(msg => {
+                    showBrowserNotification("Pesan Songfess Baru!", `Dari: ${msg.data.from} Untuk: ${msg.data.to}\nLagu: ${msg.data.song.title} oleh ${msg.data.song.artist}`);
+                });
+                lastSongfessTimestamp = songfessMessages.reduce((maxTs, msg) => {
+                    const msgTs = msg.timestamp ? msg.timestamp.toDate() : new Date(0);
+                    return msgTs > maxTs ? msgTs : maxTs;
+                }, lastSongfessTimestamp);
+            } else if (songfessMessages.length > 0) {
+                 const latestTimestampInSnapshot = songfessMessages.reduce((maxTs, msg) => {
+                    const msgTs = msg.timestamp ? msg.timestamp.toDate() : new Date(0);
+                    return msgTs > maxTs ? msgTs : maxTs;
+                }, new Date(0));
+                if (latestTimestampInSnapshot > lastSongfessTimestamp) {
+                    lastSongfessTimestamp = latestTimestampInSnapshot;
+                }
+            }
         }, (error) => {
             console.error("Error fetching songfess messages:", error);
             showAlert("Failed to load Songfess messages.", "error");
