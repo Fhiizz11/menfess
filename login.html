@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Admin - Ethicaltwo</title>
+    <!-- Import Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Import Firebase SDKs as modules -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js';
+        import { getAuth, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js';
+
+        // Firebase configuration (menggunakan konfigurasi yang Anda berikan)
+        const firebaseConfig = {
+            apiKey: "AIzaSyCHxTLI_h7lB5gp7xvPhcmVl_3QXcB03vU",
+            authDomain: "menfess-8d836.firebaseapp.com",
+            projectId: "menfess-8d836",
+            storageBucket: "menfess-8d836.firebasestorage.app",
+            messagingSenderId: "1049416220037",
+            appId: "1:1049416220037:web:3d8ecfa70be8d9cf4118ec",
+            measurementId: "G-VBMLHNV7LR"
+        };
+
+        let auth;
+
+        try {
+            const app = initializeApp(firebaseConfig); // Menggunakan firebaseConfig langsung
+            auth = getAuth(app);
+        } catch (error) {
+            console.error("Firebase initialization failed:", error);
+            const alert = document.createElement("div");
+            alert.textContent = `Failed to initialize Firebase: ${error.message}. Check your configuration or network.`;
+            alert.className = "alert error";
+            document.body.appendChild(alert);
+            setTimeout(() => alert.remove(), 3000);
+        }
+
+        window.auth = auth; // Membuat auth tersedia secara global
+    </script>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(to bottom right, #f3e7ff, #ffe7f3);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+            color: #374151;
+        }
+        .login-container {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            max-width: 450px;
+            width: 100%;
+            text-align: center;
+            animation: fadeIn 0.5s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .login-container h2 {
+            color: #6b21a8;
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+            font-weight: 700;
+        }
+        .input-group {
+            margin-bottom: 1.25rem;
+            text-align: left;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #4b5563;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 1rem;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: #6b21a8;
+            box-shadow: 0 0 0 3px rgba(107, 33, 168, 0.2);
+        }
+        .login-button {
+            width: 100%;
+            padding: 0.85rem;
+            background: #6b21a8;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background 0.3s, transform 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+        }
+        .login-button:hover {
+            background: #5b1a8e;
+            transform: translateY(-2px);
+        }
+        .login-button:active {
+            transform: translateY(0);
+        }
+        .login-button:disabled {
+            background: #a78bfa;
+            cursor: not-allowed;
+        }
+        .alert {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem;
+            border-radius: 8px;
+            color: white;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            animation: fadeInOut 3s forwards;
+            z-index: 1000;
+        }
+        .alert.success { background: #22c55e; }
+        .alert.error { background: #dc2626; }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(10px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(10px); }
+        }
+        .hidden { display: none; }
+        .loading-spinner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+        .loading-spinner i {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h2>Admin Login</h2>
+        <form id="login-form">
+            <div class="input-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" placeholder="admin@example.com" required>
+            </div>
+            <div class="input-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="password" required>
+            </div>
+            <button type="submit" class="login-button" id="login-btn">
+                <span class="button-text">Login</span>
+                <span class="loading-spinner hidden">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </span>
+            </button>
+        </form>
+    </div>
+    <div id="alert" class="alert hidden"></div>
+
+    <script type="module">
+        import { signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js';
+
+        // Alert function
+        function showAlert(message, type) {
+            const alert = document.getElementById("alert");
+            alert.textContent = message;
+            alert.className = `alert ${type}`;
+            alert.style.animation = 'none';
+            void alert.offsetWidth;
+            alert.style.animation = null;
+            setTimeout(() => alert.classList.add("hidden"), 3000);
+        }
+
+        // Function to handle button loading state
+        function setButtonLoading(buttonId, isLoading) {
+            const button = document.getElementById(buttonId);
+            const buttonText = button.querySelector('.button-text');
+            const loadingSpinner = button.querySelector('.loading-spinner');
+
+            if (isLoading) {
+                button.disabled = true;
+                if (buttonText) buttonText.classList.add('hidden');
+                if (loadingSpinner) loadingSpinner.classList.remove('hidden');
+            } else {
+                button.disabled = false;
+                if (buttonText) buttonText.classList.remove('hidden');
+                if (loadingSpinner) loadingSpinner.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            setButtonLoading('login-btn', true);
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                if (!window.auth) {
+                    showAlert("Firebase Auth not initialized. Please refresh.", "error");
+                    return;
+                }
+                await signInWithEmailAndPassword(window.auth, email, password);
+                showAlert("Login successful! Redirecting...", "success");
+                // Redirect ke halaman admin setelah login berhasil
+                window.location.href = '/admin';
+            } catch (error) {
+                console.error("Login error:", error);
+                let errorMessage = "Login failed. Please check your email and password.";
+                if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                    errorMessage = "Invalid email or password.";
+                } else if (error.code === 'auth/invalid-email') {
+                    errorMessage = "Invalid email format.";
+                }
+                showAlert(errorMessage, "error");
+            } finally {
+                setButtonLoading('login-btn', false);
+            }
+        });
+    </script>
+</body>
+</html>

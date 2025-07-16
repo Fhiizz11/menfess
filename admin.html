@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Ethicaltwo</title>
+    <!-- Import Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Import Firebase SDKs as modules -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js';
+        import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js';
+        import { getFirestore, collection, query, orderBy, onSnapshot, doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js';
+
+        // Firebase configuration (menggunakan konfigurasi yang Anda berikan)
+        const firebaseConfig = {
+            apiKey: "AIzaSyCHxTLI_h7lB5gp7xvPhcmVl_3QXcB03vU",
+            authDomain: "menfess-8d836.firebaseapp.com",
+            projectId: "menfess-8d836",
+            storageBucket: "menfess-8d836.firebasestorage.app",
+            messagingSenderId: "1049416220037",
+            appId: "1:1049416220037:web:3d8ecfa70be8",
+            measurementId: "G-VBMLHNV7LR"
+        };
+
+        let dbInstance; // Mengubah nama variabel untuk menghindari redeklarasi
+        let authInstance; // Mengubah nama variabel untuk menghindari redeklarasi
+
+        try {
+            const app = initializeApp(firebaseConfig);
+            dbInstance = getFirestore(app);
+            authInstance = getAuth(app);
+
+            // Menangani status otentikasi
+            onAuthStateChanged(authInstance, (user) => {
+                if (user) {
+                    console.log("Admin logged in:", user.uid);
+                    initAdminPage();
+                } else {
+                    // Jika tidak ada user, redirect ke login
+                    // Menggunakan window.location.origin untuk mendapatkan URL dasar
+                    window.location.href = window.location.origin + '/login.html';
+                }
+            });
+        } catch (error) {
+            console.error("Firebase initialization failed:", error);
+            const alert = document.createElement("div");
+            alert.textContent = `Failed to initialize Firebase: ${error.message}. Check your configuration or network.`;
+            alert.className = "alert error";
+            document.body.appendChild(alert);
+            setTimeout(() => alert.remove(), 3000);
+        }
+
+        // Membuat instance db dan auth tersedia secara global
+        window.db = dbInstance;
+        window.auth = authInstance;
+    </script>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(to bottom right, #f3e7ff, #ffe7f3);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: #374151;
+        }
+        header {
+            background: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 100;
+        }
+        header h1 {
+            color: #6b21a8;
+            font-size: 1.8rem;
+            margin: 0;
+            font-weight: 700;
+        }
+        .navbar {
+            display: flex;
+            gap: 1.5rem;
+        }
+        .navbar button {
+            background: none;
+            border: none;
+            padding: 0.75rem 1.25rem;
+            border-radius: 25px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #4b5563;
+        }
+        .navbar button:hover {
+            background: #e5e7eb;
+            color: #6b21a8;
+        }
+        .navbar button.active {
+            background: #6b21a8;
+            color: white;
+            box-shadow: 0 4px 10px rgba(107, 33, 168, 0.2);
+        }
+        .logout-btn {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s, transform 0.1s;
+            font-weight: 600;
+        }
+        .logout-btn:hover {
+            background: #b91c1c;
+            transform: translateY(-1px);
+        }
+        .logout-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Hamburger Menu Styles */
+        .hamburger-menu {
+            display: none; /* Sembunyikan secara default */
+            font-size: 1.8rem;
+            color: #6b21a8;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .hamburger-menu:hover {
+            background: #e5e7eb;
+        }
+
+        /* Mobile Navbar Overlay */
+        .mobile-navbar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5); /* Overlay gelap */
+            z-index: 99; /* Di bawah header, di atas konten */
+            opacity: 0; /* Mulai dengan transparan */
+            visibility: hidden; /* Sembunyikan dari interaksi mouse */
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+        .mobile-navbar-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .mobile-navbar {
+            position: fixed;
+            top: 0;
+            right: -400px; /* Sembunyikan di luar layar */
+            width: 280px;
+            height: 100%;
+            background: white;
+            box-shadow: -4px 0 15px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem;
+            transition: right 0.3s ease-in-out;
+            z-index: 100;
+        }
+        .mobile-navbar.open {
+            right: 0; /* Tampilkan */
+        }
+        .mobile-navbar .close-btn {
+            align-self: flex-end;
+            background: none;
+            border: none;
+            font-size: 2rem;
+            color: #6b21a8;
+            cursor: pointer;
+            margin-bottom: 1rem;
+        }
+        .mobile-navbar .nav-button,
+        .mobile-navbar .logout-btn {
+            width: 100%;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            font-size: 1.1rem;
+            text-align: left; /* Rata kiri untuk mobile menu */
+            border-bottom: 1px solid #eee; /* Garis pemisah */
+            border-radius: 0; /* Hapus border radius */
+        }
+        .mobile-navbar .nav-button:last-of-type,
+        .mobile-navbar .logout-btn {
+            border-bottom: none;
+        }
+        .mobile-navbar .logout-btn {
+            background: #dc2626; /* Warna merah untuk logout */
+            color: white;
+            font-weight: bold;
+            margin-top: 1rem;
+        }
+        .mobile-navbar .logout-btn:hover {
+            background: #b91c1c;
+        }
+
+
+        main {
+            flex-grow: 1;
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+        .content-area {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            width: 100%;
+            animation: fadeIn 0.5s ease-out;
+        }
+        .content-area h2 {
+            color: #6b21a8;
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 0.75rem;
+        }
+
+        /* Beranda Styles */
+        .message-filter {
+            margin-bottom: 1.5rem;
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+        .message-filter button {
+            padding: 0.6rem 1.2rem;
+            border-radius: 20px;
+            border: 1px solid #d1d5db;
+            background: #f9fafb;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        .message-filter button.active {
+            background: #6b21a8;
+            color: white;
+            border-color: #6b21a8;
+        }
+        .message-filter button:not(.active):hover {
+            background: #e5e7eb;
+        }
+
+        .message-list {
+            max-height: 500px;
+            overflow-y: auto;
+            padding-right: 10px; /* Untuk scrollbar */
+        }
+        .message-card {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s;
+        }
+        .message-card:hover {
+            transform: translateY(-3px);
+        }
+        .message-card h3 {
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+            color: #6b21a8;
+            font-size: 1.2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .message-card .meta {
+            font-size: 0.85rem;
+            color: #6b7280;
+            margin-bottom: 0.75rem;
+            display: block;
+        }
+        .message-card p {
+            margin-bottom: 0.75rem;
+            line-height: 1.6;
+            color: #4b5563;
+        }
+        .message-card .song-info {
+            display: flex;
+            align-items: center;
+            background: #eef2ff;
+            padding: 0.75rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            border: 1px solid #c7d2fe;
+        }
+        .message-card .song-info img {
+            width: 50px;
+            height: 50px;
+            border-radius: 5px;
+            margin-right: 0.75rem;
+        }
+        .message-card .song-info div {
+            flex-grow: 1;
+        }
+        .message-card .song-info p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: #374151;
+        }
+        .message-card .song-info p:first-child {
+            font-weight: bold;
+            color: #4338ca;
+        }
+        .no-messages {
+            text-align: center;
+            color: #6b7280;
+            padding: 2rem;
+            font-style: italic;
+        }
+
+        /* Settings Styles */
+        .settings-group {
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid #eee;
+        }
+        .settings-group:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        .settings-group h3 {
+            color: #6b21a8;
+            font-size: 1.4rem;
+            margin-bottom: 1rem;
+        }
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding: 0.75rem 0;
+        }
+        .setting-item label {
+            font-weight: 500;
+            color: #4b5563;
+            font-size: 1.1rem;
+        }
+        /* Toggle switch styles */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #6b21a8;
+        }
+        input:focus + .slider {
+            box-shadow: 0 0 1px #6b21a8;
+        }
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        .save-settings-btn {
+            background: #22c55e;
+            color: white;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s, transform 0.1s;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+        }
+        .save-settings-btn:hover {
+            background: #16a34a;
+            transform: translateY(-2px);
+        }
+        .save-settings-btn:active {
+            transform: translateY(0);
+        }
+        .save-settings-btn:disabled {
+            background: #86efac;
+            cursor: not-allowed;
+        }
+
+        /* General Utility Styles */
+        .hidden { display: none; }
+        .loading-spinner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+        .loading-spinner i {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .alert {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem;
+            border-radius: 8px;
+            color: white;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            animation: fadeInOut 3s forwards;
+            z-index: 1000;
+        }
+        .alert.success { background: #22c55e; }
+        .alert.error { background: #dc2626; }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(10px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(10px); }
+        }
+
+        /* Media Queries for Responsiveness */
+        @media (max-width: 768px) {
+            header {
+                flex-direction: row;
+                justify-content: space-between;
+                padding: 1rem;
+            }
+            .navbar {
+                display: none; /* Sembunyikan navbar default */
+            }
+            #logout-btn-desktop {
+                display: none; /* Sembunyikan logout desktop */
+            }
+            .hamburger-menu {
+                display: block; /* Tampilkan hamburger menu */
+            }
+            main {
+                padding: 1rem;
+            }
+            .content-area {
+                padding: 1.5rem;
+            }
+            .message-filter {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+            .message-filter button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Admin Ethicaltwo</h1>
+        <nav class="navbar" id="desktop-navbar">
+            <button class="nav-button active" data-tab="dashboard">Beranda</button>
+            <button class="nav-button" data-tab="settings">Settings</button>
+        </nav>
+        <button class="logout-btn" id="logout-btn-desktop">Logout</button>
+        <div class="hamburger-menu" id="hamburger-menu">
+            <i class="fas fa-bars"></i>
+        </div>
+    </header>
+
+    <!-- Mobile Navbar Overlay -->
+    <div class="mobile-navbar-overlay" id="mobile-navbar-overlay"></div>
+    <nav class="mobile-navbar" id="mobile-navbar">
+        <button class="close-btn" id="mobile-navbar-close-btn"><i class="fas fa-times"></i></button>
+        <button class="nav-button" data-tab="dashboard">Beranda</button>
+        <button class="nav-button" data-tab="settings">Settings</button>
+        <button class="logout-btn" id="logout-btn-mobile">Logout</button>
+    </nav>
+
+    <main>
+        <div id="dashboard-content" class="content-area">
+            <h2>Pesan Masuk</h2>
+            <div class="message-filter">
+                <button id="filter-all" class="active">Semua</button>
+                <button id="filter-menfess">Menfess</button>
+                <button id="filter-songfess">Songfess</button>
+            </div>
+            <div id="message-list" class="message-list">
+                <!-- Pesan akan dimuat di sini -->
+                <p class="no-messages">Memuat pesan...</p>
+            </div>
+        </div>
+
+        <div id="settings-content" class="content-area hidden">
+            <h2>Pengaturan Aplikasi</h2>
+            <div class="settings-group">
+                <h3>Status Layanan</h3>
+                <div class="setting-item">
+                    <label for="menfess-status">Menfess Open</label>
+                    <label class="switch">
+                        <input type="checkbox" id="menfess-status">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <label for="songfess-status">Songfess Open</label>
+                    <label class="switch">
+                        <input type="checkbox" id="songfess-status">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            <button class="save-settings-btn" id="save-settings-btn">
+                <span class="button-text">Simpan Pengaturan</span>
+                <span class="loading-spinner hidden">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </span>
+            </button>
+        </div>
+    </main>
+
+    <div id="alert" class="alert hidden"></div>
+
+    <script type="module">
+        import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js';
+        import { collection, query, onSnapshot, doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js';
+
+        // Menggunakan window.db dan window.auth yang sudah diinisialisasi di script head
+        const db = window.db;
+        const auth = window.auth;
+
+        let currentFilter = 'all'; // 'all', 'menfess', 'songfess'
+        let menfessMessages = [];
+        let songfessMessages = [];
+        // Mengubah inisialisasi timestamp agar tidak memicu notifikasi pada load awal
+        let lastMenfessTimestamp = new Date();
+        let lastSongfessTimestamp = new Date();
+
+        // --- Utility Functions ---
+        function showAlert(message, type) {
+            const alert = document.getElementById("alert");
+            alert.textContent = message;
+            alert.className = `alert ${type}`;
+            alert.style.animation = 'none';
+            void alert.offsetWidth;
+            alert.style.animation = null;
+            setTimeout(() => alert.classList.add("hidden"), 3000);
+        }
+
+        function setButtonLoading(buttonId, isLoading) {
+            const button = document.getElementById(buttonId);
+            const buttonText = button.querySelector('.button-text');
+            const loadingSpinner = button.querySelector('.loading-spinner');
+
+            if (isLoading) {
+                button.disabled = true;
+                if (buttonText) buttonText.classList.add('hidden');
+                if (loadingSpinner) loadingSpinner.classList.remove('hidden');
+            } else {
+                button.disabled = false;
+                if (buttonText) buttonText.classList.remove('hidden');
+                if (loadingSpinner) loadingSpinner.classList.add('hidden');
+            }
+        }
+
+        // --- Navbar and Tab Switching ---
+        function showTab(tabId) {
+            document.querySelectorAll('.content-area').forEach(content => {
+                content.classList.add('hidden');
+            });
+            document.getElementById(`${tabId}-content`).classList.remove('hidden');
+
+            // Untuk desktop navbar
+            document.querySelectorAll('#desktop-navbar .nav-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            const desktopBtn = document.querySelector(`#desktop-navbar .nav-button[data-tab="${tabId}"]`);
+            if (desktopBtn) desktopBtn.classList.add('active');
+
+            // Untuk mobile navbar
+            document.querySelectorAll('#mobile-navbar .nav-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            const mobileBtn = document.querySelector(`#mobile-navbar .nav-button[data-tab="${tabId}"]`);
+            if (mobileBtn) mobileBtn.classList.add('active');
+
+            closeMobileNavbar(); // Tutup mobile navbar setelah memilih tab
+        }
+
+        // Event listeners untuk navigasi desktop
+        document.querySelectorAll('#desktop-navbar .nav-button').forEach(button => {
+            button.addEventListener('click', () => {
+                showTab(button.dataset.tab);
+            });
+        });
+
+        // Event listeners untuk navigasi mobile
+        document.querySelectorAll('#mobile-navbar .nav-button').forEach(button => {
+            button.addEventListener('click', () => {
+                showTab(button.dataset.tab);
+            });
+        });
+
+        // Logout buttons
+        document.getElementById('logout-btn-desktop').addEventListener('click', async () => {
+            try {
+                await signOut(auth);
+                showAlert("Logged out successfully! Redirecting...", "success");
+                // Menggunakan window.location.origin untuk mendapatkan URL dasar
+                window.location.href = window.location.origin + '/login.html';
+            } catch (error) {
+                console.error("Logout error:", error);
+                showAlert("Failed to logout. Please try again.", "error");
+            }
+        });
+
+        document.getElementById('logout-btn-mobile').addEventListener('click', async () => {
+            try {
+                await signOut(auth);
+                showAlert("Logged out successfully! Redirecting...", "success");
+                // Menggunakan window.location.origin untuk mendapatkan URL dasar
+                window.location.href = window.location.origin + '/login';
+            } catch (error) {
+                console.error("Logout error:", error);
+                showAlert("Failed to logout. Please try again.", "error");
+            }
+        });
+
+        // Hamburger menu functionality
+        const hamburgerMenu = document.getElementById('hamburger-menu');
+        const mobileNavbar = document.getElementById('mobile-navbar');
+        const mobileNavbarCloseBtn = document.getElementById('mobile-navbar-close-btn');
+        const mobileNavbarOverlay = document.getElementById('mobile-navbar-overlay');
+
+        hamburgerMenu.addEventListener('click', () => {
+            mobileNavbar.classList.add('open');
+            mobileNavbarOverlay.classList.add('open'); // Tambahkan kelas 'open' untuk overlay
+        });
+
+        mobileNavbarCloseBtn.addEventListener('click', () => {
+            closeMobileNavbar();
+        });
+
+        mobileNavbarOverlay.addEventListener('click', () => {
+            closeMobileNavbar();
+        });
+
+        function closeMobileNavbar() {
+            mobileNavbar.classList.remove('open');
+            mobileNavbarOverlay.classList.remove('open'); // Hapus kelas 'open' dari overlay
+        }
+
+        // --- Dashboard (Message Display) ---
+        function renderMessages() {
+            const messageListDiv = document.getElementById('message-list');
+            messageListDiv.innerHTML = ''; // Clear previous messages
+
+            let messagesToDisplay = [];
+            // Gabungkan kedua array dan tambahkan properti 'timestampDate' untuk sorting yang konsisten
+            messagesToDisplay = [...menfessMessages, ...songfessMessages].map(msg => {
+                // Pastikan timestamp ada dan merupakan objek Firestore Timestamp
+                const timestampDate = msg.timestamp && typeof msg.timestamp.toDate === 'function'
+                                      ? msg.timestamp.toDate()
+                                      : new Date(0); // Fallback ke epoch jika timestamp tidak valid
+                return { ...msg, timestampDate };
+            }).sort((a, b) => b.timestampDate - a.timestampDate); // Urutkan dari terbaru ke terlama
+
+            if (currentFilter === 'menfess') {
+                messagesToDisplay = messagesToDisplay.filter(msg => msg.type === 'menfess');
+            } else if (currentFilter === 'songfess') {
+                messagesToDisplay = messagesToDisplay.filter(msg => msg.type === 'songfess');
+            }
+
+            if (messagesToDisplay.length === 0) {
+                messageListDiv.innerHTML = '<p class="no-messages">Tidak ada pesan untuk ditampilkan.</p>';
+                return;
+            }
+
+            messagesToDisplay.forEach(msg => {
+                const messageCard = document.createElement('div');
+                messageCard.className = 'message-card';
+
+                const timestampFormatted = msg.timestampDate.toLocaleString();
+
+                let songInfoHtml = '';
+                if (msg.song) {
+                    songInfoHtml = `
+                        <div class="song-info">
+                            <img src="${msg.song.cover || 'https://placehold.co/50x50/cccccc/ffffff?text=No+Cover'}" alt="Album cover" onerror="this.onerror=null;this.src='https://placehold.co/50x50/cccccc/ffffff?text=No+Cover';">
+                            <div>
+                                <p>${msg.song.title}</p>
+                                <p>${msg.song.artist}</p>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                messageCard.innerHTML = `
+                    <h3>${msg.type === 'menfess' ? 'Menfess' : 'Songfess'} dari: ${msg.from} untuk: ${msg.to}</h3>
+                    <span class="meta">${timestampFormatted}</span>
+                    <p>${msg.message}</p>
+                    ${songInfoHtml}
+                `;
+                messageListDiv.appendChild(messageCard);
+            });
+        }
+
+        // Event listeners for message filters
+        document.getElementById('filter-all').addEventListener('click', () => {
+            currentFilter = 'all';
+            document.querySelectorAll('.message-filter button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('filter-all').classList.add('active');
+            renderMessages();
+        });
+        document.getElementById('filter-menfess').addEventListener('click', () => {
+            currentFilter = 'menfess';
+            document.querySelectorAll('.message-filter button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('filter-menfess').classList.add('active');
+            renderMessages();
+        });
+        document.getElementById('filter-songfess').addEventListener('click', () => {
+            currentFilter = 'songfess';
+            document.querySelectorAll('.message-filter button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('filter-songfess').classList.add('active');
+            renderMessages();
+        });
+
+        // --- Notification Logic ---
+        function requestNotificationPermission() {
+            if (!("Notification" in window)) {
+                console.warn("Browser does not support desktop notification");
+            } else if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+                Notification.requestPermission().then(permission => {
+                    if (permission === "granted") {
+                        showAlert("Notifikasi diaktifkan!", "success");
+                    } else {
+                        showAlert("Notifikasi diblokir. Anda tidak akan menerima notifikasi pesan baru.", "error");
+                    }
+                });
+            }
+        }
+
+        function showBrowserNotification(title, body) {
+            if (Notification.permission === "granted") {
+                new Notification(title, { body: body, icon: 'https://placehold.co/48x48/6b21a8/ffffff?text=ET' }); // Icon placeholder
+            }
+        }
+
+        // Listen for Menfess messages with notification
+        const menfessQuery = query(collection(db, "menfess"));
+        onSnapshot(menfessQuery, (snapshot) => {
+            // Jika ini adalah load awal, set lastMenfessTimestamp ke timestamp pesan terbaru yang ada
+            // agar tidak ada notifikasi untuk pesan lama.
+            if (lastMenfessTimestamp.getTime() === new Date().getTime() && snapshot.docs.length > 0) {
+                const latestDoc = snapshot.docs.reduce((prev, curr) => {
+                    const prevTs = prev.data().timestamp ? prev.data().timestamp.toDate() : new Date(0);
+                    const currTs = curr.data().timestamp ? curr.data().timestamp.toDate() : new Date(0);
+                    return currTs > prevTs ? curr : prev;
+                });
+                lastMenfessTimestamp = latestDoc.data().timestamp ? latestDoc.data().timestamp.toDate() : new Date(0);
+            }
+
+            snapshot.docChanges().forEach(change => {
+                if (change.type === "added") {
+                    const newMenfess = change.doc.data();
+                    const timestamp = newMenfess.timestamp ? newMenfess.timestamp.toDate() : new Date(0);
+                    // Hanya notifikasi jika pesan lebih baru dari timestamp terakhir yang diketahui
+                    if (timestamp > lastMenfessTimestamp) {
+                        showBrowserNotification("Pesan Menfess Baru!", `Dari: ${newMenfess.from} Untuk: ${newMenfess.to}\n"${newMenfess.message.substring(0, 50)}..."`);
+                        lastMenfessTimestamp = timestamp; // Perbarui timestamp terakhir setelah notifikasi
+                    }
+                }
+            });
+            menfessMessages = snapshot.docs.map(doc => ({ id: doc.id, type: 'menfess', ...doc.data() }));
+            renderMessages();
+        }, (error) => {
+            console.error("Error fetching menfess messages:", error);
+            showAlert("Failed to load Menfess messages.", "error");
+        });
+
+        // Listen for Songfess messages with notification
+        const songfessQuery = query(collection(db, "songfess"));
+        onSnapshot(songfessQuery, (snapshot) => {
+             // Jika ini adalah load awal, set lastSongfessTimestamp ke timestamp pesan terbaru yang ada
+            // agar tidak ada notifikasi untuk pesan lama.
+            if (lastSongfessTimestamp.getTime() === new Date().getTime() && snapshot.docs.length > 0) {
+                const latestDoc = snapshot.docs.reduce((prev, curr) => {
+                    const prevTs = prev.data().timestamp ? prev.data().timestamp.toDate() : new Date(0);
+                    const currTs = curr.data().timestamp ? curr.data().timestamp.toDate() : new Date(0);
+                    return currTs > prevTs ? curr : prev;
+                });
+                lastSongfessTimestamp = latestDoc.data().timestamp ? latestDoc.data().timestamp.toDate() : new Date(0);
+            }
+
+            snapshot.docChanges().forEach(change => {
+                if (change.type === "added") {
+                    const newSongfess = change.doc.data();
+                    const timestamp = newSongfess.timestamp ? newSongfess.timestamp.toDate() : new Date(0);
+                     // Hanya notifikasi jika pesan lebih baru dari timestamp terakhir yang diketahui
+                    if (timestamp > lastSongfessTimestamp) {
+                        showBrowserNotification("Pesan Songfess Baru!", `Dari: ${newSongfess.from} Untuk: ${newSongfess.to}\nLagu: ${newSongfess.song.title} oleh ${newSongfess.song.artist}`);
+                        lastSongfessTimestamp = timestamp; // Perbarui timestamp terakhir setelah notifikasi
+                    }
+                }
+            });
+            songfessMessages = snapshot.docs.map(doc => ({ id: doc.id, type: 'songfess', ...doc.data() }));
+            renderMessages();
+        }, (error) => {
+            console.error("Error fetching songfess messages:", error);
+            showAlert("Failed to load Songfess messages.", "error");
+        });
+
+
+        // --- Settings Management ---
+        const settingsDocRef = doc(db, "appSettings/status");
+        let initialSettingsLoaded = false; // Flag untuk mencegah overwrite default saat pertama load
+
+        // Gunakan onSnapshot untuk settings agar perubahan langsung terlihat
+        onSnapshot(settingsDocRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                document.getElementById('menfess-status').checked = data.menfessOpen;
+                document.getElementById('songfess-status').checked = data.songfessOpen;
+            } else {
+                // Jika dokumen pengaturan belum ada, inisialisasi dengan nilai default (true)
+                // dan simpan ke Firestore hanya jika belum pernah diinisialisasi
+                if (!initialSettingsLoaded) {
+                    document.getElementById('menfess-status').checked = true;
+                    document.getElementById('songfess-status').checked = true;
+                    setDoc(settingsDocRef, { menfessOpen: true, songfessOpen: true, lastUpdated: serverTimestamp() })
+                        .then(() => console.log("Default settings saved."))
+                        .catch(error => console.error("Error saving default settings:", error));
+                }
+            }
+            initialSettingsLoaded = true; // Set flag setelah settings dimuat/diinisialisasi
+        }, (error) => {
+            console.error("Error fetching settings:", error);
+            showAlert("Failed to load settings.", "error");
+        });
+
+
+        document.getElementById('save-settings-btn').addEventListener('click', async () => {
+            setButtonLoading('save-settings-btn', true);
+            try {
+                const menfessOpen = document.getElementById('menfess-status').checked;
+                const songfessOpen = document.getElementById('songfess-status').checked;
+
+                await setDoc(settingsDocRef, {
+                    menfessOpen: menfessOpen,
+                    songfessOpen: songfessOpen,
+                    lastUpdated: serverTimestamp()
+                });
+                showAlert("Pengaturan berhasil disimpan!", "success");
+            } catch (error) {
+                console.error("Error saving settings:", error);
+                showAlert("Gagal menyimpan pengaturan.", "error");
+            } finally {
+                setButtonLoading('save-settings-btn', false);
+            }
+        });
+
+        // --- Initialize Admin Page after Auth ---
+        function initAdminPage() {
+            showTab('dashboard'); // Tampilkan dashboard secara default
+            requestNotificationPermission(); // Minta izin notifikasi saat admin page dimuat
+        }
+    </script>
+</body>
+</html>
